@@ -1,0 +1,11 @@
+.DS_Store
+log/*
+database.yml
+db/*.sqlite3
+db/*.sql
+*~
+tmp/restart.txt
+tmp/*
+tmp/pids/*.pid
+public/spec/*
+coverage/*
