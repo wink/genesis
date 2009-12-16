@@ -1,7 +1,5 @@
 require File.dirname(__FILE__) + '/../spec_helper'
-  # Be sure to include AuthenticatedTestHelper in spec/spec_helper.rb instead
-# Then, you can remove it from this and the units test.
-include AuthenticatedTestHelper
+include FixtureReplacement
 
 #
 # A test controller with and without access controls
@@ -29,33 +27,31 @@ end
 #
 # Access Control
 #
-
 ACCESS_CONTROL_FORMATS = [
   ['',     "success"],
   ['xml',  "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<hash>\n  <success>xml</success>\n</hash>\n"],
-  ['json', "{\"success\": \"json\"}"],]
-ACCESS_CONTROL_AM_I_LOGGED_IN = [
-  [:i_am_logged_in,     :quentin],
-  [:i_am_not_logged_in, nil],]
-ACCESS_CONTROL_IS_LOGIN_REQD = [
-  :login_not_required,
-  :login_is_required,]
+  ['json', "{\"success\": \"json\"}"] ]
+ACCESS_CONTROL_AM_I_LOGGED_IN = [ :i_am_logged_in, :i_am_not_logged_in ]
+ACCESS_CONTROL_IS_LOGIN_REQD = [ :login_not_required, :login_is_required ]
 
 describe AccessControlTestController do
-  fixtures        :people
+  
+  # fixtures        :people
   before do
     # is there a better way to do this?
     ActionController::Routing::Routes.add_route '/login_is_required',           :controller => 'access_control_test',   :action => 'login_is_required'
     ActionController::Routing::Routes.add_route '/login_not_required',          :controller => 'access_control_test',   :action => 'login_not_required'
+    @person = create_activated_person
   end
 
   ACCESS_CONTROL_FORMATS.each do |format, success_text|
-    ACCESS_CONTROL_AM_I_LOGGED_IN.each do |logged_in_status, person_login|
+    ACCESS_CONTROL_AM_I_LOGGED_IN.each do |logged_in_status|
       ACCESS_CONTROL_IS_LOGIN_REQD.each do |login_reqd_status|
         describe "requesting #{format.blank? ? 'html' : format}; #{logged_in_status.to_s.humanize} and #{login_reqd_status.to_s.humanize}" do
           before do
             logout_keeping_session!
-            @person = format.blank? ? login_as(person_login) : authorize_as(person_login)
+            person = logged_in_status == :i_am_logged_in ? @person : nil
+            format.blank? ? login_as(person) : authorize_as(person)
             get login_reqd_status.to_s, :format => format
           end
 

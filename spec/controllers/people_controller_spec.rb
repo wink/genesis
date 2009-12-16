@@ -1,7 +1,7 @@
 require File.dirname(__FILE__) + '/../spec_helper'
 
 describe PeopleController do
-  fixtures :people
+  # fixtures :people
 
   it 'allows signup' do
     lambda do
@@ -56,12 +56,13 @@ describe PeopleController do
   
   
   it 'activates user' do
-    Person.authenticate('aaron', 'monkey').should be_nil
-    get :activate, :activation_code => people(:aaron).activation_code
+    @person = create_unactivated_person(:password => 'monkey', :password_confirmation => 'monkey', :activation_code => '1b6453892473a467d07372d45eb05abc2031647a')
+    Person.authenticate(@person.login, 'monkey').should be_nil
+    get :activate, :activation_code => @person.activation_code
     response.should redirect_to('/login')
     flash[:notice].should_not be_nil
     flash[:error ].should     be_nil
-    Person.authenticate('aaron', 'monkey').should == people(:aaron)
+    Person.authenticate(@person.login, 'monkey').should == @person
   end
   
   it 'does not activate user without key' do
@@ -111,12 +112,11 @@ describe PeopleController do
     end
     
     it "should route people's 'update' action correctly" do
-      puts route_for(:controller => 'people', :action => 'update', :id => '1').inspect
-      route_for(:controller => 'people', :action => 'update', :id => '1').should == "/people/1"
+      route_for(:controller => 'people', :action => 'update', :id => '1').should == {:path => "/people/1", :method => :put}
     end
     
     it "should route people's 'destroy' action correctly" do
-      route_for(:controller => 'people', :action => 'destroy', :id => '1').should == "/people/1"
+      route_for(:controller => 'people', :action => 'destroy', :id => '1').should == {:path => "/people/1", :method => :delete}
     end
   end
   

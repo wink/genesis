@@ -6,13 +6,14 @@ require File.dirname(__FILE__) + '/../spec_helper'
 include AuthenticatedTestHelper
 
 describe Person do
-  fixtures :people
+  # fixtures :people
 
   describe 'being created' do
     before do
       @person = nil
       @creating_person = lambda do
-        @person = create_person
+        @person = create_unactivated_person
+        puts @person.inspect
         violated "#{@person.errors.full_messages.to_sentence}" if @person.new_record?
       end
     end
@@ -40,17 +41,17 @@ describe Person do
 
   it 'requires login' do
     lambda do
-      u = create_person(:login => nil)
+      u = create_unactivated_person(:login => nil)
       u.errors.on(:login).should_not be_nil
     end.should_not change(Person, :count)
   end
 
   describe 'allows legitimate logins:' do
-    ['123', '1234567890_234567890_234567890_234567890',
+    ['123', '1234567890_234567890_234567890_234567890', "Iñtërnâtiônàlizætiøn",
      'hello.-_there@funnychar.com'].each do |login_str|
       it "'#{login_str}'" do
         lambda do
-          u = create_person(:login => login_str)
+          u = create_unactivated_person(:login => login_str)
           u.errors.on(:login).should     be_nil
         end.should change(Person, :count).by(1)
       end
@@ -58,11 +59,10 @@ describe Person do
   end
   describe 'disallows illegitimate logins:' do
     ['12', '1234567890_234567890_234567890_234567890_', "tab\t", "newline\n",
-     "Iñtërnâtiônàlizætiøn hasn't happened to ruby 1.8 yet",
      'semicolon;', 'quote"', 'tick\'', 'backtick`', 'percent%', 'plus+', 'space '].each do |login_str|
       it "'#{login_str}'" do
         lambda do
-          u = create_person(:login => login_str)
+          u = create_unactivated_person(:login => login_str)
           u.errors.on(:login).should_not be_nil
         end.should_not change(Person, :count)
       end
@@ -71,21 +71,21 @@ describe Person do
 
   it 'requires password' do
     lambda do
-      u = create_person(:password => nil)
+      u = create_unactivated_person(:password => nil)
       u.errors.on(:password).should_not be_nil
     end.should_not change(Person, :count)
   end
 
   it 'requires password confirmation' do
     lambda do
-      u = create_person(:password_confirmation => nil)
+      u = create_unactivated_person(:password_confirmation => nil)
       u.errors.on(:password_confirmation).should_not be_nil
     end.should_not change(Person, :count)
   end
 
   it 'requires email' do
     lambda do
-      u = create_person(:email => nil)
+      u = create_unactivated_person(:email => nil)
       u.errors.on(:email).should_not be_nil
     end.should_not change(Person, :count)
   end
@@ -98,7 +98,7 @@ describe Person do
     ].each do |email_str|
       it "'#{email_str}'" do
         lambda do
-          u = create_person(:email => email_str)
+          u = create_unactivated_person(:email => email_str)
           u.errors.on(:email).should     be_nil
         end.should change(Person, :count).by(1)
       end
@@ -113,7 +113,7 @@ describe Person do
     ].each do |email_str|
       it "'#{email_str}'" do
         lambda do
-          u = create_person(:email => email_str)
+          u = create_unactivated_person(:email => email_str)
           u.errors.on(:email).should_not be_nil
         end.should_not change(Person, :count)
       end
@@ -126,7 +126,7 @@ describe Person do
     ].each do |name_str|
       it "'#{name_str}'" do
         lambda do
-          u = create_person(:name => name_str)
+          u = create_unactivated_person(:name => name_str)
           u.errors.on(:name).should     be_nil
         end.should change(Person, :count).by(1)
       end
@@ -138,7 +138,7 @@ describe Person do
      ].each do |name_str|
       it "'#{name_str}'" do
         lambda do
-          u = create_person(:name => name_str)
+          u = create_unactivated_person(:name => name_str)
           u.errors.on(:name).should_not be_nil
         end.should_not change(Person, :count)
       end
@@ -146,13 +146,15 @@ describe Person do
   end
 
   it 'resets password' do
-    people(:quentin).update_attributes(:password => 'new password', :password_confirmation => 'new password')
-    Person.authenticate('quentin', 'new password').should == people(:quentin)
+    @person = create_activated_person
+    @person.update_attributes(:password => 'new password', :password_confirmation => 'new password')
+    Person.authenticate(@person.login, 'new password').should == @person
   end
 
   it 'does not rehash password' do
-    people(:quentin).update_attributes(:login => 'quentin2')
-    Person.authenticate('quentin2', 'monkey').should == people(:quentin)
+    @person = create_activated_person(:password => 'monkey', :password_confirmation => 'monkey')
+    @person.update_attributes(:login => 'quentin2')
+    Person.authenticate('quentin2', 'monkey').should == @person
   end
 
   #
@@ -160,11 +162,13 @@ describe Person do
   #
 
   it 'authenticates person' do
-    Person.authenticate('quentin', 'monkey').should == people(:quentin)
+    @person = create_activated_person(:password => 'monkey', :password_confirmation => 'monkey')
+    Person.authenticate(@person.login, 'monkey').should == @person
   end
 
   it "doesn't authenticate person with bad password" do
-    Person.authenticate('quentin', 'invalid_password').should be_nil
+    @person = create_activated_person
+    Person.authenticate(@person.login, 'invalid_password').should be_nil
   end
 
  if REST_AUTH_SITE_KEY.blank?
@@ -190,71 +194,77 @@ describe Person do
   #
   # Authentication
   #
+  describe "authentication" do
+    before do
+      @person = create_activated_person
+    end
+    
+    it 'sets remember token' do
+      @person.remember_me
+      @person.remember_token.should_not be_nil
+      @person.remember_token_expires_at.should_not be_nil
+    end
 
-  it 'sets remember token' do
-    people(:quentin).remember_me
-    people(:quentin).remember_token.should_not be_nil
-    people(:quentin).remember_token_expires_at.should_not be_nil
+    it 'unsets remember token' do
+      @person.remember_me
+      @person.remember_token.should_not be_nil
+      @person.forget_me
+      @person.remember_token.should be_nil
+    end
+
+    it 'remembers me for one week' do
+      before = 1.week.from_now.utc
+      @person.remember_me_for 1.week
+      after = 1.week.from_now.utc
+      @person.remember_token.should_not be_nil
+      @person.remember_token_expires_at.should_not be_nil
+      @person.remember_token_expires_at.between?(before, after).should be_true
+    end
+
+    it 'remembers me until one week' do
+      time = 1.week.from_now.utc
+      @person.remember_me_until time
+      @person.remember_token.should_not be_nil
+      @person.remember_token_expires_at.should_not be_nil
+      @person.remember_token_expires_at.should == time
+    end
+
+    it 'remembers me default two weeks' do
+      before = 2.weeks.from_now.utc
+      @person.remember_me
+      after = 2.weeks.from_now.utc
+      @person.remember_token.should_not be_nil
+      @person.remember_token_expires_at.should_not be_nil
+      @person.remember_token_expires_at.between?(before, after).should be_true
+    end
+
+    it 'registers passive person' do
+      person = create_unactivated_person(:password => nil, :password_confirmation => nil)
+      person.should be_passive
+      person.update_attributes(:password => 'new password', :password_confirmation => 'new password')
+      person.register!
+      person.should be_pending
+    end
+
+    it 'suspends person' do
+      @person.suspend!
+      @person.should be_suspended
+    end
+
+    it 'does not authenticate suspended person' do
+      @person = create_activated_person(:password => 'monkey', :password_confirmation => 'monkey')
+      @person.suspend!
+      Person.authenticate(@person.login, 'monkey').should_not == @person
+    end
+
+    it 'deletes person' do
+      @person.deleted_at.should be_nil
+      @person.delete!
+      @person.deleted_at.should_not be_nil
+      @person.should be_deleted
+    end
   end
-
-  it 'unsets remember token' do
-    people(:quentin).remember_me
-    people(:quentin).remember_token.should_not be_nil
-    people(:quentin).forget_me
-    people(:quentin).remember_token.should be_nil
-  end
-
-  it 'remembers me for one week' do
-    before = 1.week.from_now.utc
-    people(:quentin).remember_me_for 1.week
-    after = 1.week.from_now.utc
-    people(:quentin).remember_token.should_not be_nil
-    people(:quentin).remember_token_expires_at.should_not be_nil
-    people(:quentin).remember_token_expires_at.between?(before, after).should be_true
-  end
-
-  it 'remembers me until one week' do
-    time = 1.week.from_now.utc
-    people(:quentin).remember_me_until time
-    people(:quentin).remember_token.should_not be_nil
-    people(:quentin).remember_token_expires_at.should_not be_nil
-    people(:quentin).remember_token_expires_at.should == time
-  end
-
-  it 'remembers me default two weeks' do
-    before = 2.weeks.from_now.utc
-    people(:quentin).remember_me
-    after = 2.weeks.from_now.utc
-    people(:quentin).remember_token.should_not be_nil
-    people(:quentin).remember_token_expires_at.should_not be_nil
-    people(:quentin).remember_token_expires_at.between?(before, after).should be_true
-  end
-
-  it 'registers passive person' do
-    person = create_person(:password => nil, :password_confirmation => nil)
-    person.should be_passive
-    person.update_attributes(:password => 'new password', :password_confirmation => 'new password')
-    person.register!
-    person.should be_pending
-  end
-
-  it 'suspends person' do
-    people(:quentin).suspend!
-    people(:quentin).should be_suspended
-  end
-
-  it 'does not authenticate suspended person' do
-    people(:quentin).suspend!
-    Person.authenticate('quentin', 'monkey').should_not == people(:quentin)
-  end
-
-  it 'deletes person' do
-    people(:quentin).deleted_at.should be_nil
-    people(:quentin).delete!
-    people(:quentin).deleted_at.should_not be_nil
-    people(:quentin).should be_deleted
-  end
-
+  
   describe "being unsuspended" do
     fixtures :people
 
@@ -281,10 +291,4 @@ describe Person do
     end
   end
 
-protected
-  def create_person(options = {})
-    record = Person.new({ :login => 'quire', :email => 'quire@example.com', :password => 'quire69', :password_confirmation => 'quire69' }.merge(options))
-    record.register! if record.valid?
-    record
-  end
 end

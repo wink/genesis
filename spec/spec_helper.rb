@@ -49,3 +49,16 @@ Spec::Runner.configure do |config|
   config.include FixtureReplacement
   
 end
+
+def create_unactivated_person(options = {})
+  record = new_person(options)
+  record.register! if record.valid?
+  record
+end
+
+def create_activated_person(options = {})
+  record = new_person(options)
+  record.register! if record.valid?
+  record.activate!
+  record
+end
